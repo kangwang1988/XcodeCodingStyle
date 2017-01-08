@@ -66,6 +66,25 @@ static inline string &trim(string &s) {
     return ltrim(rtrim(s));
 }
 
+static inline string absolutePathFromRelative(string relativePath){
+    vector<string> pathComs = split(relativePath,'/');
+    vector<string> absoPathVec;
+    ostringstream oss;
+    for(vector<string>::iterator it = pathComs.begin();it!=pathComs.end();it++){
+        string path = *it;
+        if(!path.compare("") || !path.compare("."))
+            continue;
+        if(!path.compare("..")){
+            absoPathVec.pop_back();
+        }
+        else{
+            absoPathVec.push_back(string("/")+path);
+        }
+    }
+    copy(absoPathVec.begin(), absoPathVec.end(), ostream_iterator<string>(oss));
+    return oss.str();
+}
+
 static string formatPropertyDelegateType(string name){
     string newName(name);
     if(name.find("<")!=string::npos && name.find(">")!=string::npos){

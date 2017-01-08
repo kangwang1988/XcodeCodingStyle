@@ -130,25 +130,25 @@ namespace CodingStyle
         }
         if(propDecl->getTypeSourceInfo()){
             string typeStr = propDecl->getType().getAsString();
-            if(typeStr.find("NSString *")!=string::npos){
-                if(attributeKind & ObjCPropertyDecl::OBJC_PR_strong){
-                    unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "NSString *should use the attributes copy instead of strong.");
-                    diagEngine.Report(location, diagID);
-                    return;
+            remove_blank(typeStr);
+            unsigned diagID = 0;
+            if(typeStr.find("NSString*")!=string::npos || typeStr.find("NSArray*")!=string::npos){
+                if(!(attributeKind & ObjCPropertyDecl::OBJC_PR_copy)){
+                    if(typeStr.find("NSString*")!=string::npos)
+                        diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "NSString should use the attributes copy instead of strong.");
+                    else if(typeStr.find("NSArray*")!=string::npos)
+                        diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "NSArray should use the attributes copy instead of strong.");
                 }
             }
             if(!typeStr.compare("int")){
-                unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Use the built-in NSInteger instead of int.");
-                diagEngine.Report(location, diagID);
-                return;
+                diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Use the built-in NSInteger instead of int.");
             }
             //Delegate
-            if(typeStr.find("<")!=string::npos && typeStr.find(">")!=string::npos){
+            else if(typeStr.find("<")!=string::npos && typeStr.find(">")!=string::npos){
                 string typeSrcCode;
                 typeSrcCode.assign(context->getSourceManager().getCharacterData(propDecl->getSourceRange().getBegin()),propDecl->getSourceRange().getEnd().getRawEncoding()-propDecl->getSourceRange().getBegin().getRawEncoding());
                 if(!(attributeKind & ObjCPropertyDecl::OBJC_PR_weak)){
-                    unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Delegate should be declared as weak.");
-                    diagEngine.Report(location, diagID);
+                    diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Delegate should be declared as weak.");
                 }
                 string replaceName = formatPropertyDelegateType(typeSrcCode);
                 if(replaceName.compare(typeSrcCode)){
@@ -156,10 +156,11 @@ namespace CodingStyle
                     SourceLocation nameStart = propDecl->getSourceRange().getBegin();
                     SourceLocation nameEnd = nameStart.getLocWithOffset(typeSrcCode.length()-1);
                     FixItHint fixItHint = FixItHint::CreateReplacement(SourceRange(nameStart, nameEnd), replacement);
-                    unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Class delegate should be like id<XXX> delegate");
-                    diagEngine.Report(location, diagID).AddFixItHint(fixItHint);
+                    diagEngine.Report(location, diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Class delegate should be like id<XXX> delegate")).AddFixItHint(fixItHint);
                 }
             }
+            if(diagID)
+                diagEngine.Report(location, diagID);
         }
     }
     void CodingStyleASTVisitor::checkMethodDecl(ObjCMethodDecl *methodDecl){
@@ -168,20 +169,20 @@ namespace CodingStyle
         PrintingPolicy Policy(LangOpts);
         DiagnosticsEngine &diagEngine = context->getDiagnostics();
         SourceLocation location = methodDecl->getSourceRange().getBegin();
-        //检查方法名格式
-        if(!methodDecl->hasBody() && methodDecl->param_size()>kMethodParamMaxParamsSingleLine){
-            string methodDeclStr;
-            methodDeclStr.assign(context->getSourceManager().getCharacterData(methodDecl->getSourceRange().getBegin()),methodDecl->getSourceRange().getEnd().getRawEncoding()-methodDecl->getSourceRange().getBegin().getRawEncoding());
-            string replaceName = formatObjcMethodName(methodDeclStr);
-            if(replaceName.compare(methodDeclStr)){
-                StringRef replacement(replaceName);
-                SourceLocation nameStart = methodDecl->getSourceRange().getBegin();
-                SourceLocation nameEnd = nameStart.getLocWithOffset(methodDeclStr.length()-1);
-                FixItHint fixItHint = FixItHint::CreateReplacement(SourceRange(nameStart, nameEnd), replacement);
-                unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Method with params over 3 should be seperated into lines and aligned by comma.");
-                diagEngine.Report(location, diagID).AddFixItHint(fixItHint);
-            }
-        }
+//        //检查方法名格式
+//        if(!methodDecl->hasBody() && methodDecl->param_size()>kMethodParamMaxParamsSingleLine){
+//            string methodDeclStr;
+//            methodDeclStr.assign(context->getSourceManager().getCharacterData(methodDecl->getSourceRange().getBegin()),methodDecl->getSourceRange().getEnd().getRawEncoding()-methodDecl->getSourceRange().getBegin().getRawEncoding());
+//            string replaceName = formatObjcMethodName(methodDeclStr);
+//            if(replaceName.compare(methodDeclStr)){
+//                StringRef replacement(replaceName);
+//                SourceLocation nameStart = methodDecl->getSourceRange().getBegin();
+//                SourceLocation nameEnd = nameStart.getLocWithOffset(methodDeclStr.length()-1);
+//                FixItHint fixItHint = FixItHint::CreateReplacement(SourceRange(nameStart, nameEnd), replacement);
+//                unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Method with params over 3 should be seperated into lines and aligned by comma.");
+//                diagEngine.Report(location, diagID).AddFixItHint(fixItHint);
+//            }
+//        }
         //检查函数参数
         for(ObjCMethodDecl::param_iterator pi = methodDecl->param_begin();pi!=methodDecl->param_end();pi++){
             ParmVarDecl *varDecl = *pi;
@@ -264,20 +265,20 @@ namespace CodingStyle
         objcExpr->printPretty(rsoExpr, 0, Policy);
         string oriExpr = rsoExpr.str();
 
-        //检查消息发送格式
-        if(objcExpr->getNumArgs()>kMethodParamMaxParamsSingleLine){
-            string messageStr;
-            messageStr.assign(context->getSourceManager().getCharacterData(objcExpr->getSourceRange().getBegin()),objcExpr->getSourceRange().getEnd().getRawEncoding()-objcExpr->getSourceRange().getBegin().getRawEncoding());
-            string replaceName = formatObjcMethodName(messageStr);
-            if(replaceName.compare(messageStr)){
-                StringRef replacement(replaceName);
-                SourceLocation nameStart = objcExpr->getSourceRange().getBegin();
-                SourceLocation nameEnd = nameStart.getLocWithOffset(messageStr.length()-1);
-                FixItHint fixItHint = FixItHint::CreateReplacement(SourceRange(nameStart, nameEnd), replacement);
-                unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Method with params over 3 should be seperated into lines and aligned by comma.");
-                diagEngine.Report(location, diagID).AddFixItHint(fixItHint);
-            }
-        }
+        //检查消息发送格式 此处逻辑废弃，只考虑Decl，因为此处可能出现block，会很深，有问题。
+//        if(objcExpr->getNumArgs()>kMethodParamMaxParamsSingleLine){
+//            string messageStr;
+//            messageStr.assign(context->getSourceManager().getCharacterData(objcExpr->getSourceRange().getBegin()),objcExpr->getSourceRange().getEnd().getRawEncoding()-objcExpr->getSourceRange().getBegin().getRawEncoding());
+//            string replaceName = formatObjcMethodName(messageStr);
+//            if(replaceName.compare(messageStr)){
+//                StringRef replacement(replaceName);
+//                SourceLocation nameStart = objcExpr->getSourceRange().getBegin();
+//                SourceLocation nameEnd = nameStart.getLocWithOffset(messageStr.length()-1);
+//                FixItHint fixItHint = FixItHint::CreateReplacement(SourceRange(nameStart, nameEnd), replacement);
+//                unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Method with params over 3 should be seperated into lines and aligned by comma.");
+//                diagEngine.Report(location, diagID).AddFixItHint(fixItHint);
+//            }
+//        }
         remove_blank(oriExpr);
         if((objcSelector.find("init")==0 || !objcSelector.compare("dealloc")) && oriExpr.find("[self")==0){
             unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "Don't send message to self in init/dealloc.");
@@ -360,7 +361,8 @@ namespace CodingStyle
     bool CodingStyleASTAction::ParseArgs(const CompilerInstance &CI, const std::vector<std::string>& args) {
         size_t cnt = args.size();
         if(cnt == 1){
-            gSrcRootPath = args.at(0);
+            string relativePath = args.at(0);
+            gSrcRootPath =  absolutePathFromRelative(relativePath);
         }
         return true;
     }
